@@ -602,3 +602,7 @@ func (d *Device) GetDeviceMode() (mode *DeviceMode, err error) {
 	}
 	return
 }
+func (d *Device) GetNVLinkNumbers() (map[string][]uint, error) {
+	return d.handle.deviceGetAllNvLinkNumbersRemotePciInfo()
+}
+

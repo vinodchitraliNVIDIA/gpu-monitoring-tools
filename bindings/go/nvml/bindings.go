@@ -25,6 +25,13 @@ const (
 
 	XidCriticalError = C.nvmlEventTypeXidCriticalError
 )
+const(
+	/* FIXME Max NVML LINKs is varying in some GPUs
+	* Give max number to 256 for now. Nvml Will be
+	* iterated C.NVML_NVLINK_MAX_LINKS + 1 time
+	*/
+	MAX_NVLINKS = 256
+)
 
 type handle struct{ dev C.nvmlDevice_t }
 type EventSet struct{ set C.nvmlEventSet_t }
@@ -295,9 +302,12 @@ func (h handle) deviceGetNvLinkRemotePciInfo(link uint) (*string, error) {
 func (h handle) deviceGetAllNvLinkRemotePciInfo() ([]*string, error) {
 	busIds := []*string{}
 
-	for i := uint(0); i < C.NVML_NVLINK_MAX_LINKS; i++ {
+	for i := uint(0); i < MAX_NVLINKS; i++ {
 		state, err := h.deviceGetNvLinkState(i)
 		if err != nil {
+			if strings.Contains(err.Error(), "Invalid Argument") {
+				return busIds, nil
+			}
 			return nil, err
 		}
 
@@ -717,3 +727,35 @@ func (h handle) getPeristenceMode() (state ModeState, err error) {
 	}
 	return ModeState(mode), errorString(r)
 }
+
+func (h handle) deviceGetAllNvLinkNumbersRemotePciInfo() (map[string][]uint, error) {
+       nvlinks := make(map[string][]uint, 0)
+       for i := uint(0); i < MAX_NVLINKS; i++ {
+               state, err := h.deviceGetNvLinkState(i)
+               if err != nil {
+			if strings.Contains(err.Error(), "Invalid Argument") {
+				return nvlinks, nil
+			}
+                       return nil, err
+               }
+
+               if state == nil {
+                       continue
+               }
+
+               if *state == C.NVML_FEATURE_ENABLED {
+                       pci, err := h.deviceGetNvLinkRemotePciInfo(i)
+                       if err != nil {
+                               return nil, err
+                       }
+
+                       if pci == nil {
+                               continue
+                       }
+                       nvlinks[*pci] = append(nvlinks[*pci], i)
+               }
+       }
+
+       return nvlinks, nil
+}
+
